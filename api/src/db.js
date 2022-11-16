@@ -9,11 +9,6 @@ const { DB_NAME, DB_USER, DB_PASSWORD, DB_HOST,DB_PORT, DB_DEPLOY } = require('.
 const sequelize = new Sequelize(DB_DEPLOY, {
     logging: false,
     native: false,
-    dialectOptions : {
-      ssl: {
-        require: true
-      }
-    },
     port:DB_PORT
 });
 const basename = path.basename(__filename);
