@@ -1,24 +1,34 @@
 const data = require('./categories.json')
 const dataP = require('./products.json')
 const dataU = require('./users.json')
-const {Category, Product, User} = require('../src/db.js')
+const dataB = require('./initialBalance.json')
+const {Category, Product, User, Balance} = require('../src/db.js')
 
 // funcion para setear los datos iniciales a la tabla Categories
 async function createUsers() {
   dataU.users.forEach(async el =>
-    { const [entry , created] = await User.findOrCreate({where:{
-      name: el.username,
-      password: el.password,
-      image: el.image,
-      emailAddress: el.emailAddress,
-      homeAddress: el.homeAddress,
-      region: el.region,
-      city: el.city,
-      phoneNumber: el.phoneNumber,
-      lastTransaction: el.lastTransaction
-    }})
-    if(created) { await entry.createCartUser({total: 0}); await entry.createFavoritesUser() }
-})
+    {
+      const [entry, created] = await User.findOrCreate({
+        where: {
+          emailAddress: el.emailAddress,
+        },
+        defaults: {
+          name: el.username,
+          image: el.image,
+          homeAddress: el.homeAddress,
+          region: el.region,
+          city: el.city,
+          phoneNumber: el.phoneNumber,
+          lastTransaction: el.lastTransaction,
+          status: el.status,
+          isAdmin: el.isAdmin,
+        },
+      });
+      if (created) {
+        await entry.createCartUser({ total: 0 });
+        await entry.createFavoritesUser();
+      }
+    })
 };
 
 
@@ -45,8 +55,13 @@ async function createProducts() {
     })}
 })};
 
+async function initialBalance() {
+  Balance.create(dataB)
+}
+
 module.exports = {
     createUsers,
     creatCategories,
-    createProducts
+    createProducts,
+    initialBalance
   };

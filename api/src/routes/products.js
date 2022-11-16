@@ -1,14 +1,16 @@
 const { Router } = require("express");
 
+
+const {
+  getRole
+} = require("../handlers/routeProtection")
+
+
 const { 
   sendEmail,
   productoPublicado,
  } = require("../mail/index");
 
-const user = {
-  name: 'Usuario',
-  email: 'juiraMarket@gmail.com' //para probar, estos datos deberian obtenerse desde la db
-} 
 
 const {
   searchByQuery,
@@ -18,7 +20,10 @@ const {
   newProductBodyIsValid,
   findProductAndCategories,
   updateProduct,
+  throwError,
+  getUserById,
 } = require("../handlers");
+const { Product, Category, QandA, User } = require("../db");
 
 const router = Router();
 
@@ -43,6 +48,32 @@ router
     }
   })
 
+  .get('/byToken', getRole, async(req,res) => {
+    const {role, id} = req
+    try {
+      if (role === 'guest') throwError('You are not signed in', 401)
+      const userProducts = await Product.findAll({
+        where: {
+          ownerId: id,
+        },
+        order: ["id"],
+        include: [{
+          model: Category,
+          through: {
+            attributes: [],
+          },
+        },
+        {
+          model: QandA,
+          as: "productQAndA"
+        }],
+      })
+      res.json(userProducts)
+    } catch (error) {
+      res.status(error.number || 400).json(error.message)
+    }
+  })
+
   .get("/:id", async (req, res) => {
     const { id } = req.params;
     try {
@@ -53,28 +84,53 @@ router
     }
   })
 
-  .post("/", async (req, res) => {
+  .post("/", getRole,async (req, res) => {
     const data = req.body;
+    const {role, id} = req
     try {
+      if (role === 'guest') throwError("You are not signed in",401)
       newProductBodyIsValid(data);
-      const newProduct = await createProduct(data);
+      data.status = "Publicado"
+      const newProduct = await Product.create(data)
+      if(!newProduct) throwError('Something went wrong at product creation', 400)
+      await newProduct.setOwner(id);
+      await newProduct.setCategories(data.categories)
+      const fullUser = (await User.findByPk(id)).toJSON()
+      
+      const user = {
+        name: fullUser.name,
+        email: fullUser.emailAddress //para probar, estos datos deberian obtenerse desde la db
+      } 
+      
       const html = productoPublicado(user, data) //get personalized html template
       await sendEmail(user, 'Producto Publicado', html)
       res.status(201).json(`${data.name} successfully created`);
     } catch (error) {
-      res.status(400).json(error.message);
+      res.status(error.number || 400).json(error.message);
     }
   })
 
-  .put("/:id", async (req, res) => {
-    const { id } = req.params;
+  .put("/:productId", getRole,async (req, res) => {
+    const { productId } = req.params;
     const body = req.body;
+    const { categories } = req.body;
+    const {id, role} = req
     try {
-      const updated = await updateProduct(id, body);
+      if (role === 'guest') throwError("You are not signed in", 401)
+      const user = (await getUserById(id)).toJSON()
+      const ownsProduct = user.productsOwner.some((ele) => ele.id === parseInt(productId))
+      if (role === 'user' && !ownsProduct) throwError("You cannot change a product which you do not own", 401)
+      let updated = await updateProduct(productId, body);
+      if(categories) {
+        const { productToModify, categoriesToModify } =
+        await findProductAndCategories(productId, categories);
+
+        await productToModify.setCategories(categoriesToModify);
+      }
 
       res.status(200).json(updated);
     } catch (error) {
-      res.status(400).json(error.message);
+      res.status(error.number || 400).json(error.message);
     }
   })
 
@@ -82,6 +138,7 @@ router
     // ** param id refers to product id **
     const { id } = req.params;
     const { categories } = req.body;
+
     try {
       const { productToModify, categoriesToModify } =
         await findProductAndCategories(id, categories);
