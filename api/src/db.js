@@ -6,10 +6,10 @@ const { userInfo } = require('os');
 const { DB_NAME, DB_USER, DB_PASSWORD, DB_HOST,DB_PORT, DB_DEPLOY } = require('./config');
 
 
-const sequelize = new Sequelize(DB_DEPLOY, {
+const sequelize = new Sequelize(`postgresql://${{ PGUSER }}:${{ PGPASSWORD }}@${{ PGHOST }}:${{ PGPORT }}/${{ PGDATABASE }}`, {
     logging: false,
     native: false,
-    port:DB_PORT
+    port:PGPORT
 });
 const basename = path.basename(__filename);
 
